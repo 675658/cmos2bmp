@@ -9,6 +9,23 @@
 typedef int (*read_pixels_fun)(FILE *fp_in,int x,int y,uint8_t rgb_out[3]);
 typedef int (*interpolation_fun)(bmp_img *img,uint16_t h,uint16_t v);
 
+int yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t rgb_out[3])
+{
+    int rgb[3] = {0};
+    rgb[0] = y+1.4075f*((int32_t)v-128);
+    rgb[1] = y-0.3455f*((int32_t)u-128)-0.7169f*((int32_t)v-128);
+    rgb[2] = y+1.779f*((int32_t)u-128);
+    for(int i=0;i<3;i++)
+    {
+        if(rgb[i]<0)
+            rgb[i] = 0;
+        if(rgb[i]>255)
+            rgb[i] = 255;
+        rgb_out[i] = rgb[i];
+    }
+    return 0;
+}
+
 int read_rgb888(FILE *fp_in,int x,int y,uint8_t rgb_out[3])
 {
     if(fread(&rgb_out,1,3,fp_in)!=3){
@@ -57,6 +74,41 @@ int read_raw_10(FILE *fp_in,int x,int y,uint8_t rgb_out[3])
         }
     }
     return 0;
+}
+
+int read_raw_16(FILE *fp_in,int x,int y,uint8_t rgb_out[3])
+{
+    uint16_t pixel;
+    if(fread(&pixel,1,2,fp_in)!=2){
+        return -1;
+    }
+    rgb_out[0] = (pixel)>>8u;
+    rgb_out[1] = (pixel)>>8u;
+    rgb_out[2] = (pixel)>>8u;
+    return 0;
+}
+
+int read_yuv422_interleaved(FILE *fp_in,int x,int y,uint8_t i_y1, uint8_t i_y2, uint8_t i_u, uint8_t i_v,uint8_t rgb_out[3])
+{
+    static uint8_t buf[4];
+    if((x&1)==1)
+    {
+        return yuv2rgb(buf[i_y2],buf[i_u],buf[i_v],rgb_out);
+    }
+    if(fread(buf,1,4,fp_in)!=4){
+        return -1;
+    }
+    return yuv2rgb(buf[i_y1],buf[i_u],buf[i_v],rgb_out);
+}
+
+int read_yuv422_uyvy(FILE *fp_in,int x,int y,uint8_t rgb_out[3])
+{
+    return read_yuv422_interleaved(fp_in, x, y, 1, 3, 0, 2, rgb_out);
+}
+
+int read_yuv422_yuyv(FILE *fp_in,int x,int y,uint8_t rgb_out[3])
+{
+    return read_yuv422_interleaved(fp_in, x, y, 0, 2, 1, 3, rgb_out);
 }
 
 int cmos_raw_interpolation_get_average(bmp_img *img,uint16_t h,uint16_t v,int x,int y,uint8_t value_out[3][4])
@@ -214,7 +266,7 @@ int convert_to_bmp(const char *in_file,const char *out_file,uint16_t h,uint16_t 
     bmp_img img;
     uint8_t pixel[3];
     int x,y;
-    fp_in=fopen64(in_file,"rb");
+    fp_in=fopen(in_file,"rb");
     if(fp_in==NULL)
     {
         perror("Err: ");
@@ -272,6 +324,9 @@ cmos2bmp_convert_type convert_table[]=
     {"raw10_grbg",read_raw_10,cmos_raw_interpolat_grbg},
     {"raw10_bggr",read_raw_10,cmos_raw_interpolat_bggr},
     {"raw10_gbrg",read_raw_10,cmos_raw_interpolat_gbrg},
+    {"raw16",read_raw_16,NULL},
+    {"yuv422_uyvy",read_yuv422_uyvy,NULL},
+    {"yuv422_yuyv",read_yuv422_yuyv,NULL}
 };
 int main(int argc,char **argv)
 {
