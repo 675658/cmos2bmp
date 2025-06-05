@@ -6,6 +6,8 @@
 #include <errno.h>
 #include "libbmp.h"
 
+char version[] = "V0.01";
+
 typedef int (*read_pixels_fun)(FILE *fp_in,int x,int y,uint8_t rgb_out[3]);
 typedef int (*interpolation_fun)(bmp_img *img,uint16_t h,uint16_t v);
 
@@ -115,6 +117,10 @@ int cmos_raw_interpolation_get_average(bmp_img *img,uint16_t h,uint16_t v,int x,
 {
     uint32_t sum[3][4]={0}; //- | + x
     uint8_t count[4]={0};
+    if(h<2 || v<2)
+    {
+        return -1;
+    }
     if(x-1>=0)
     {
         sum[0][0]+=img->img_pixels[y][x-1].red;
@@ -206,6 +212,10 @@ int cmos_raw_interpolat(bmp_img *img,uint16_t h,uint16_t v,uint8_t sw_x,uint8_t 
 {
     int x,y;
     uint8_t average[3][4];
+    if(h<2 || v<2)
+    {
+        return -1;
+    }
     for(y=0;y<v;y++)
     {
         for(x=0;x<h;x++)
@@ -393,6 +403,7 @@ int main(int argc,char **argv)
     }
     
 FLAG_PRINT_HELP_AND_RETURN:
+    printf("----cmos2bmp %s----\n", version);
     printf("cmos2bmp -i input_file -o output_file -h hor_size -v ver_size [-t type] [-hb hor_blank]\n"
            "    type:\n");
     for(int i=0;i<sizeof(convert_table)/sizeof(cmos2bmp_convert_type);i++)
